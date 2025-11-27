@@ -1,0 +1,426 @@
+FILE main.py
+========================================
+#!/usr/bin/env python3
+"""
+Entry point for the task management application
+"""
+from task_manager.ui import TaskManagerUI
+
+
+def main():
+    """Launch the application"""
+    ui = TaskManagerUI()
+    ui.run()
+
+
+if __name__ == "__main__":
+    main()
+========================================
+END FILE
+
+FILE task_manager/__init__.py
+========================================
+"""
+Task Manager - a simple application for task management
+"""
+
+__version__ = "1.0.0"
+__author__ = "Test Developer"
+
+from task_manager.models import Task, Priority
+from task_manager.storage import TaskStorage
+from task_manager.ui import TaskManagerUI
+
+__all__ = ['Task', 'Priority', 'TaskStorage', 'TaskManagerUI']
+========================================
+END FILE
+
+FILE task_manager/models.py
+========================================
+"""
+Data models for tasks
+"""
+from enum import Enum
+from datetime import datetime
+from dataclasses import dataclass
+from typing import Optional
+
+
+class Priority(Enum):
+    """Task priority"""
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    URGENT = 4
+
+
+@dataclass
+class Task:
+    """Class for representing a task"""
+    id: int
+    title: str
+    description: str
+    priority: Priority
+    completed: bool = False
+    created_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    
+    def __post_init__(self):
+        if self.created_at is None:
+            self.created_at = datetime.now()
+    
+    def mark_completed(self):
+        """Mark task as completed"""
+        self.completed = True
+        self.completed_at = datetime.now()
+    
+    def mark_incomplete(self):
+        """Mark task as incomplete"""
+        self.completed = False
+        self.completed_at = None
+    
+    def to_dict(self):
+        """Convert task to dictionary"""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'priority': self.priority.name,
+            'completed': self.completed,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """Create task from dictionary"""
+        return cls(
+            id=data['id'],
+            title=data['title'],
+            description=data['description'],
+            priority=Priority[data['priority']],
+            completed=data['completed'],
+            created_at=datetime.fromisoformat(data['created_at']) if data['created_at'] else None,
+            completed_at=datetime.fromisoformat(data['completed_at']) if data['completed_at'] else None
+        )
+========================================
+END FILE
+
+FILE task_manager/storage.py
+========================================
+"""
+Module for saving and loading tasks
+"""
+import json
+import os
+from typing import List, Optional
+from task_manager.models import Task
+
+
+class TaskStorage:
+    """Class for working with task storage"""
+    
+    def __init__(self, filename: str = "tasks.json"):
+        self.filename = filename
+        self.tasks: List[Task] = []
+        self.next_id = 1
+        self.load_tasks()
+    
+    def load_tasks(self):
+        """Load tasks from file"""
+        if os.path.exists(self.filename):
+            try:
+                with open(self.filename, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.tasks = [Task.from_dict(task_data) for task_data in data]
+                    if self.tasks:
+                        self.next_id = max(task.id for task in self.tasks) + 1
+            except (json.JSONDecodeError, KeyError):
+                self.tasks = []
+                self.next_id = 1
+    
+    def save_tasks(self):
+        """Save tasks to file"""
+        with open(self.filename, 'w', encoding='utf-8') as f:
+            json.dump([task.to_dict() for task in self.tasks], f, ensure_ascii=False, indent=2)
+    
+    def add_task(self, task: Task) -> Task:
+        """Add new task"""
+        task.id = self.next_id
+        self.next_id += 1
+        self.tasks.append(task)
+        self.save_tasks()
+        return task
+    
+    def get_task(self, task_id: int) -> Optional[Task]:
+        """Get task by ID"""
+        for task in self.tasks:
+            if task.id == task_id:
+                return task
+        return None
+    
+    def update_task(self, task: Task):
+        """Update task"""
+        self.save_tasks()
+    
+    def delete_task(self, task_id: int) -> bool:
+        """Delete task by ID"""
+        for i, task in enumerate(self.tasks):
+            if task.id == task_id:
+                del self.tasks[i]
+                self.save_tasks()
+                return True
+        return False
+    
+    def get_all_tasks(self) -> List[Task]:
+        """Get all tasks"""
+        return self.tasks
+    
+    def get_incomplete_tasks(self) -> List[Task]:
+        """Get incomplete tasks"""
+        return [task for task in self.tasks if not task.completed]
+    
+    def get_completed_tasks(self) -> List[Task]:
+        """Get completed tasks"""
+        return [task for task in self.tasks if task.completed]
+========================================
+END FILE
+
+FILE task_manager/ui.py
+========================================
+"""
+User interface for task management
+"""
+from task_manager.models import Task, Priority
+from task_manager.storage import TaskStorage
+
+
+class TaskManagerUI:
+    """Console interface for task management"""
+    
+    def __init__(self):
+        self.storage = TaskStorage()
+    
+    def run(self):
+        """Run the main application loop"""
+        while True:
+            self.show_menu()
+            choice = input("\nSelect action: ").strip()
+            
+            if choice == '1':
+                self.add_task()
+            elif choice == '2':
+                self.list_tasks()
+            elif choice == '3':
+                self.mark_task_completed()
+            elif choice == '4':
+                self.delete_task()
+            elif choice == '5':
+                self.show_statistics()
+            elif choice == '0':
+                print("Goodbye!")
+                break
+            else:
+                print("Invalid choice. Try again.")
+    
+    def show_menu(self):
+        """Show main menu"""
+        print("\n" + "="*50)
+        print("TASK MANAGER")
+        print("="*50)
+        print("1. Add task")
+        print("2. Show tasks")
+        print("3. Mark task as completed")
+        print("4. Delete task")
+        print("5. Statistics")
+        print("0. Exit")
+        print("="*50)
+    
+    def add_task(self):
+        """Add new task"""
+        print("\n--- New task ---")
+        title = input("Title: ").strip()
+        if not title:
+            print("Title cannot be empty!")
+            return
+        
+        description = input("Description: ").strip()
+        
+        print("\nPriority:")
+        print("1. Low")
+        print("2. Medium")
+        print("3. High")
+        print("4. Urgent")
+        priority_choice = input("Select priority (1-4): ").strip()
+        
+        priority_map = {
+            '1': Priority.LOW,
+            '2': Priority.MEDIUM,
+            '3': Priority.HIGH,
+            '4': Priority.URGENT
+        }
+        priority = priority_map.get(priority_choice, Priority.MEDIUM)
+        
+        task = Task(id=0, title=title, description=description, priority=priority)
+        self.storage.add_task(task)
+        print(f"\n✓ Task '{title}' added!")
+    
+    def list_tasks(self):
+        """Show task list"""
+        print("\n--- Task list ---")
+        tasks = self.storage.get_all_tasks()
+        
+        if not tasks:
+            print("No tasks.")
+            return
+        
+        for task in tasks:
+            status = "✓" if task.completed else "○"
+            priority_symbol = "!" * task.priority.value
+            print(f"{status} [{task.id}] {priority_symbol} {task.title}")
+            print(f"   {task.description}")
+            print(f"   Priority: {task.priority.name}")
+            print()
+    
+    def mark_task_completed(self):
+        """Mark task as completed"""
+        try:
+            task_id = int(input("\nEnter task ID: "))
+            task = self.storage.get_task(task_id)
+            
+            if task:
+                if task.completed:
+                    print("Task already completed!")
+                else:
+                    task.mark_completed()
+                    self.storage.update_task(task)
+                    print(f"✓ Task '{task.title}' marked as completed!")
+            else:
+                print("Task not found!")
+        except ValueError:
+            print("Invalid ID!")
+    
+    def delete_task(self):
+        """Delete task"""
+        try:
+            task_id = int(input("\nEnter task ID to delete: "))
+            task = self.storage.get_task(task_id)
+            
+            if task:
+                confirm = input(f"Delete task '{task.title}'? (yes/no): ").strip().lower()
+                if confirm in ['yes', 'y']:
+                    self.storage.delete_task(task_id)
+                    print("✓ Task deleted!")
+                else:
+                    print("Cancelled.")
+            else:
+                print("Task not found!")
+        except ValueError:
+            print("Invalid ID!")
+    
+    def show_statistics(self):
+        """Show statistics"""
+        all_tasks = self.storage.get_all_tasks()
+        completed = self.storage.get_completed_tasks()
+        incomplete = self.storage.get_incomplete_tasks()
+        
+        print("\n--- Statistics ---")
+        print(f"Total tasks: {len(all_tasks)}")
+        print(f"Completed: {len(completed)}")
+        print(f"Incomplete: {len(incomplete)}")
+        
+        if all_tasks:
+            completion_rate = (len(completed) / len(all_tasks)) * 100
+            print(f"Completion rate: {completion_rate:.1f}%")
+========================================
+END FILE
+
+FILE requirements.txt
+========================================
+# No external dependencies - using only standard Python libraries
+python>=3.7
+========================================
+END FILE
+
+FILE README.md
+========================================
+# Task Manager
+
+A simple console application for task management in Python.
+
+## Features
+
+- Adding new tasks with priority
+- Viewing all tasks
+- Marking tasks as completed
+- Deleting tasks
+- Completion statistics
+
+## Installation
+
+```
+
+git clone <repository-url>
+cd task-manager
+
+```
+
+## Usage
+
+```
+
+python main.py
+
+```
+
+## Project structure
+
+```
+
+task-manager/
+├── main.py                 \# Entry point
+├── task_manager/           \# Main package
+│   ├── __init__.py        \# Package initialization
+│   ├── models.py          \# Data models (Task, Priority)
+│   ├── storage.py         \# Storage operations
+│   └── ui.py              \# User interface
+├── requirements.txt        \# Dependencies
+└── README.md              \# Documentation
+
+```
+
+## License
+
+MIT License
+========================================
+END FILE
+
+FILE .gitignore
+========================================
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Application data
+tasks.json
+
+# Distributions
+dist/
+build/
+*.egg-info/
+========================================
+END FILE

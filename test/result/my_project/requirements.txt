@@ -1,0 +1,2 @@
+# No external dependencies - using only standard Python libraries
+python>=3.7

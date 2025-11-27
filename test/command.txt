@@ -1,0 +1,1 @@
+python split_ai_answer.py task_manager_ai_response.txt -o ./result./my_project
