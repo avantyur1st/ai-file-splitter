@@ -120,7 +120,7 @@ python split_ai_answer.py ai_response.txt -o ./my_project
 ```
 
 Done! Your project structure is created in `./my_project/`
-я
+
 ***
 
 ## 🔄 Scenario 2: Refactor Existing Code
